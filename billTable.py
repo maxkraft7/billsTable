@@ -7,6 +7,7 @@ import typing
 import pandas as pd
 from openpyxl import load_workbook
 
+
 class Product:
     name: str = ""
     price: float = 0.0
@@ -83,16 +84,21 @@ class Bill:
         return dfRows
 
     def fromSplittedString(self, rawData: [str]):
-        self.id = int(rawData[2])
-        self.date = rawData[4]
-        self.time = rawData[6]
+        # get first occurrence of Nr.
+        nrLocus = rawData.index('Nr.')
+        try:
+            self.id = int(rawData[nrLocus + 1])
+            self.date = rawData[nrLocus + 3]
+            self.time = rawData[nrLocus + 5]
 
-        # find all idxs that contain `'___________________________________________'`
-        seperatorIdxs = [i for i, x in enumerate(rawData) if x == '___________________________________________']
+            # find all idxs that contain `'___________________________________________'`
+            seperatorIdxs = [i for i, x in enumerate(rawData) if x == '___________________________________________']
 
-        for i in range(0, len(seperatorIdxs), 2):
-            product: Product = Product()
-            self.products = ProductParser.fromSplittedString(rawData[seperatorIdxs[i] + 1:seperatorIdxs[i + 1]])
+            for i in range(0, len(seperatorIdxs), 2):
+                product: Product = Product()
+                self.products = ProductParser.fromSplittedString(rawData[seperatorIdxs[i] + 1:seperatorIdxs[i + 1]])
+        except ValueError:
+            print("Fehler beim Rechnung parsen!")
 
 
 def parseTxtFile(filepath: str) -> [Bill]:
@@ -182,7 +188,7 @@ if __name__ == '__main__':
             if os.path.isfile(sys.argv[1]):
                 bills = parseTxtFile(sys.argv[1])
                 table = transformBillsToTable(bills, sys.argv[1])
-                table = injectFormulas(table)
+                # table = injectFormulas(table) # can be used to directly add formulas to import-df
                 targetFile: str = createTargetFile(
                     os.path.dirname(os.path.realpath(__file__)) + "\\template.xlsx",
                     os.path.realpath(sys.argv[1])
