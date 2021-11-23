@@ -1,9 +1,11 @@
 import os
+import shutil
 import sys
+import traceback
 import typing
 
 import pandas as pd
-
+from openpyxl import load_workbook
 
 class Product:
     name: str = ""
@@ -113,15 +115,15 @@ def parseTxtFile(filepath: str) -> [Bill]:
     return parsedBills
 
 
-def injectFormulas(initial: pd.DataFrame) -> pd.DataFrame:
+def injectFormulas(parsedData: pd.DataFrame) -> pd.DataFrame:
     # !important use english formula names here!
     formulas: pd.DataFrame = pd.DataFrame({
         "": [""],  # placeholder
-        "summe": ["=sum(A:A)"]  # sum of all ids (test)
+        # "summe": ["=sum(A:A)"]  # sum of all ids (test)
     })
 
     merged = pd.concat(
-        [initial, formulas],
+        [parsedData, formulas],
         axis=1,
         join="outer",
         ignore_index=False,
@@ -135,6 +137,23 @@ def injectFormulas(initial: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
+def addImportedDataToTemplate(targetPath: str, imported: pd.DataFrame):
+    book = load_workbook(targetPath)  # already contains `Berechnung` Sheet
+    writer = pd.ExcelWriter(targetPath)  # engine = 'openpyxl'
+    writer.book = book
+
+    imported.to_excel(writer,  # add `Import` to file with `Berechnung` already in it
+                      sheet_name="Import",
+                      index_label="ID",
+                      index=False,
+                      freeze_panes=(1, 0))
+
+    writer.save()
+    writer.close()
+
+    print(f"Excel Datei gespeichert unter {targetFile}")
+
+
 def transformBillsToTable(bills: [Bill], targetPath: str, save: bool = True) -> pd.DataFrame:
     dicts = []
 
@@ -144,27 +163,34 @@ def transformBillsToTable(bills: [Bill], targetPath: str, save: bool = True) -> 
     # https://stackoverflow.com/a/47561390/11466033
     df: pd.DataFrame = pd.DataFrame(dicts)
 
-    df = injectFormulas(df)
-
-    if save:
-        targetFile = os.path.splitext(targetPath)[0] + ".xlsx"
-        df.to_excel(targetFile,
-                    sheet_name="Zusammenfassung",
-                    index_label="ID",
-                    index=False,
-                    freeze_panes=(1, 0))
-
-        print(f"Excel Datei gespeichert unter {targetFile}")
-
     return df
 
 
+def createTargetFile(templatePath: str, destinationPath: str) -> str:
+    destinationPath = os.path.splitext(destinationPath)[0] + ".xlsx"
+
+    shutil.copy2(templatePath, destinationPath)
+
+    return destinationPath
+
+
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("Keine Datei angegeben!")
-    else:
-        if os.path.isfile(sys.argv[1]):
-            bills = parseTxtFile(sys.argv[1])
-            table = transformBillsToTable(bills, sys.argv[1])
+    try:
+        if len(sys.argv) < 2:
+            print("Keine Datei angegeben!")
         else:
-            print("Angegebener Pfad ungültig!")
+            if os.path.isfile(sys.argv[1]):
+                bills = parseTxtFile(sys.argv[1])
+                table = transformBillsToTable(bills, sys.argv[1])
+                table = injectFormulas(table)
+                targetFile: str = createTargetFile(
+                    os.path.dirname(os.path.realpath(__file__)) + "\\template.xlsx",
+                    os.path.realpath(sys.argv[1])
+                )
+                addImportedDataToTemplate(targetFile, table)
+            else:
+                print("Angegebener Pfad ungültig!")
+    except Exception as e:
+        print(traceback.format_exc())
+
+    os.system('pause')
