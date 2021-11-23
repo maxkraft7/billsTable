@@ -113,6 +113,28 @@ def parseTxtFile(filepath: str) -> [Bill]:
     return parsedBills
 
 
+def injectFormulas(initial: pd.DataFrame) -> pd.DataFrame:
+    # !important use english formula names here!
+    formulas: pd.DataFrame = pd.DataFrame({
+        "": [""],  # placeholder
+        "summe": ["=sum(A:A)"]  # sum of all ids (test)
+    })
+
+    merged = pd.concat(
+        [initial, formulas],
+        axis=1,
+        join="outer",
+        ignore_index=False,
+        keys=None,
+        levels=None,
+        names=None,
+        verify_integrity=False,
+        copy=True,
+    )
+
+    return merged
+
+
 def transformBillsToTable(bills: [Bill], targetPath: str, save: bool = True) -> pd.DataFrame:
     dicts = []
 
@@ -121,6 +143,8 @@ def transformBillsToTable(bills: [Bill], targetPath: str, save: bool = True) -> 
         dicts += bill.toDataframeRows()
     # https://stackoverflow.com/a/47561390/11466033
     df: pd.DataFrame = pd.DataFrame(dicts)
+
+    df = injectFormulas(df)
 
     if save:
         targetFile = os.path.splitext(targetPath)[0] + ".xlsx"
