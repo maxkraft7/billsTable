@@ -2,3 +2,4 @@ __pychache__/**
 **/desktop.files.json
 testData/**
 build/**
+**/*.spec
