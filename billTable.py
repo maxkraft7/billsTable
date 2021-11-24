@@ -16,6 +16,24 @@ class Product:
 
 
 class ProductParser:
+
+    @staticmethod
+    def inferType(x: str) -> typing.Union[float, int, str]:
+
+        if x.__contains__(','): # could be a float
+            try:
+                x = x.replace(',', '.')
+                return float(x)
+            except:  # not a float
+                return x
+        else:
+            try:
+                return int(x)
+            except:
+                return x
+
+
+
     @staticmethod
     def fromSplittedString(rawData: [str]) -> [Product]:
         products: [Product] = []
@@ -24,22 +42,17 @@ class ProductParser:
         state = "initial"
 
         for element in rawData:
+            typedElement = ProductParser.inferType(element)
 
-            if "," in element:  # float locale
-                element = element.replace(",", ".")
+            if type(typedElement) is float:
+                number = typedElement
 
-            try:  # if element is a number
-                number = float(element)
-
-                if state == "initial":
-                    product = Product()
-                    product.amount = number
-                    state = "productName"
-
-                elif state == "totalsBegin":
+                if state == "totalsBegin":
                     product.price = number
-                    if product.amount > 1:
-                        state = "totalsEnd"
+                    if product.amount != 0:
+                        product.total = product.price * product.amount
+                        products.append(product)
+                        state = "initial"
                     else:
                         product.total = product.price * product.amount
                         products.append(product)
@@ -49,14 +62,22 @@ class ProductParser:
                     product.total = product.price * product.amount
                     products.append(product)
                     state = "initial"
+                pass
+            elif type(typedElement) is int:
 
-            except ValueError:  # element is a string
+                if state == "initial":
+                    product = Product()
+                    product.amount = typedElement
+                    state = "productName"
+                pass
+            else:
                 if state == "productName" or state == "totalsBegin":
                     if product.name == "":
                         product.name = element
                     else:
                         product.name += " " + element
                     state = "totalsBegin"
+
         return products
 
 
@@ -93,6 +114,9 @@ class Bill:
 
             # find all idxs that contain `'___________________________________________'`
             seperatorIdxs = [i for i, x in enumerate(rawData) if x == '___________________________________________']
+
+            if self.id == 2909:
+                print("target found!")
 
             for i in range(0, len(seperatorIdxs), 2):
                 product: Product = Product()
