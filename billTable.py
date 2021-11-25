@@ -20,19 +20,17 @@ class ProductParser:
     @staticmethod
     def inferType(x: str) -> typing.Union[float, int, str]:
 
-        if x.__contains__(','): # could be a float
+        if x.__contains__(','):  # could be a float
             try:
                 x = x.replace(',', '.')
                 return float(x)
-            except:  # not a float
+            except ValueError:  # not a float
                 return x
         else:
             try:
                 return int(x)
-            except:
+            except ValueError:
                 return x
-
-
 
     @staticmethod
     def fromSplittedString(rawData: [str]) -> [Product]:
@@ -115,11 +113,7 @@ class Bill:
             # find all idxs that contain `'___________________________________________'`
             seperatorIdxs = [i for i, x in enumerate(rawData) if x == '___________________________________________']
 
-            if self.id == 2909:
-                print("target found!")
-
             for i in range(0, len(seperatorIdxs), 2):
-                product: Product = Product()
                 self.products = ProductParser.fromSplittedString(rawData[seperatorIdxs[i] + 1:seperatorIdxs[i + 1]])
         except ValueError:
             print("Fehler beim Rechnung parsen!")
@@ -169,7 +163,10 @@ def injectFormulas(parsedData: pd.DataFrame) -> pd.DataFrame:
 
 def addImportedDataToTemplate(targetPath: str, imported: pd.DataFrame):
     book = load_workbook(targetPath)  # already contains `Berechnung` Sheet
-    writer = pd.ExcelWriter(targetPath)  # engine = 'openpyxl'
+    # https://stackoverflow.com/a/61364633/11466033
+    writer = pd.ExcelWriter(targetPath,
+                            engine_kwargs={'options': {'strings_to_formulas': False}}
+                            )
     writer.book = book
 
     imported.to_excel(writer,  # add `Import` to file with `Berechnung` already in it
