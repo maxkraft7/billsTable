@@ -161,24 +161,28 @@ def injectFormulas(parsedData: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def addImportedDataToTemplate(targetPath: str, imported: pd.DataFrame):
-    book = load_workbook(targetPath)  # already contains `Berechnung` Sheet
-    # https://stackoverflow.com/a/61364633/11466033
-    writer = pd.ExcelWriter(targetPath,
-                            engine_kwargs={'options': {'strings_to_formulas': False}}
-                            )
-    writer.book = book
+def addImportedDataToTemplate(targetPath: str, extension: str, imported: pd.DataFrame):
 
-    imported.to_excel(writer,  # add `Import` to file with `Berechnung` already in it
-                      sheet_name="Import",
-                      index_label="ID",
-                      index=False,
-                      freeze_panes=(1, 0))
+    if extension == "xlsx":
+        # excel mode
+        book = load_workbook(targetPath)  # already contains `Berechnung` Sheet
+        # https://stackoverflow.com/a/61364633/11466033
+        writer = pd.ExcelWriter(targetPath,engine_kwargs={'options': {'strings_to_formulas': False}})
+        writer.book = book
 
-    writer.save()
-    writer.close()
+        imported.to_excel(writer,  # add `Import` to file with `Berechnung` already in it
+                          sheet_name="Import",
+                          index_label="ID",
+                          index=False,
+                          freeze_panes=(1, 0))
 
-    print(f"Excel Datei gespeichert unter {targetFile}")
+        writer.save()
+        writer.close()
+
+        print(f"Excel Datei gespeichert unter {targetFile}")
+    else:
+        # csv mode
+        imported.to_csv(targetPath)
 
 
 def transformBillsToTable(bills: [Bill], targetPath: str, save: bool = True) -> pd.DataFrame:
@@ -193,12 +197,26 @@ def transformBillsToTable(bills: [Bill], targetPath: str, save: bool = True) -> 
     return df
 
 
-def createTargetFile(templatePath: str, destinationPath: str) -> str:
-    destinationPath = os.path.splitext(destinationPath)[0] + ".xlsx"
+def createTargetFile(templatePath: str, destinationPath: str) -> typing.Tuple[str, str]:
 
-    shutil.copy2(templatePath, destinationPath)
+    # varations: .xlsx, .csv
+    if os.path.exists(templatePath+".xlsx"):
+        # excel-mode
+        destinationPath = os.path.splitext(destinationPath)[0] + ".xlsx"
 
-    return destinationPath
+        shutil.copy2(templatePath+".xlsx", destinationPath)
+
+        return destinationPath, "xlsx"
+    else:
+        # csv mode
+        destinationPath = os.path.splitext(destinationPath)[0] + ".csv"
+
+        # shutil.copy2(templatePath, destinationPath)
+
+        return destinationPath, "csv"
+
+
+
 
 
 if __name__ == '__main__':
@@ -208,13 +226,13 @@ if __name__ == '__main__':
         else:
             if os.path.isfile(sys.argv[1]):
                 bills = parseTxtFile(sys.argv[1])
-                table = transformBillsToTable(bills, sys.argv[1])
+                table: pd.DataFrame = transformBillsToTable(bills, sys.argv[1])
                 # table = injectFormulas(table) # can be used to directly add formulas to import-df
-                targetFile: str = createTargetFile(
-                    os.path.dirname(os.path.realpath(__file__)) + "\\template.xlsx",
+                targetFile, extension = createTargetFile(
+                    os.path.dirname(os.path.realpath(__file__)) + "\\template",
                     os.path.realpath(sys.argv[1])
                 )
-                addImportedDataToTemplate(targetFile, table)
+                addImportedDataToTemplate(targetFile,extension, table)
             else:
                 print("Angegebener Pfad ungültig!")
     except Exception as e:
