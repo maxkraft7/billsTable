@@ -82,14 +82,14 @@ class ProductParser:
 
 
 class Bill:
-    id: int | None = None
-    description: str | None = None  # describes the type of bill
-    billNr: int | None = None
-    billId: int | None = None
-    date: str | None = None
+    id: int = None
+    description: str= None  # describes the type of bill
+    billNr: int = None
+    billId: int = None
+    date: str = None
     products: [Product] = []
-    time: str | None = None
-    total: float | None = None
+    time: str = None
+    total: float = None
 
     # static
     csvcounter: int = 0
