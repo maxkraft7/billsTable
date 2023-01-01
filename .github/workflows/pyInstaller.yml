@@ -1,0 +1,35 @@
+# This workflow will install Python dependencies
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
+# Furhtermore it will pack everything into a exe file https://github.com/marketplace/actions/pyinstaller-windows
+
+name: Package Application with Pyinstaller
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+	
+permissions:
+  contents: read
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    
+      - name: Package Application
+        uses: JackMcKew/pyinstaller-action-windows@main
+        # looks for requirements-.txt in src folder
+        # looks for .spec file in src folder
+        with:
+          path: src
+          
+      - uses: actions/upload-artifact@v2
+      - name: Publish file
+        with:
+          name: bills-table # todo add tag name here ${{github.ref_name}}
+          path: src/dist/windows
+		
