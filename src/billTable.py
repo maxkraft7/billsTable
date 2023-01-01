@@ -1,8 +1,9 @@
 import os
 import shutil
 import sys
-import traceback
 import typing
+# todo show warnings
+import warnings
 
 import pandas as pd
 from openpyxl import load_workbook
@@ -12,7 +13,7 @@ class Product:
     name: str = ""
     price: float = 0.0
     amount: int = 0
-    total: float = 0.0
+    totalPrice: float = 0.0
 
 
 class ProductParser:
@@ -20,6 +21,7 @@ class ProductParser:
     @staticmethod
     def inferType(x: str) -> typing.Union[float, int, str]:
 
+        # todo remove try/catch blocks
         if x.__contains__(','):  # could be a float
             try:
                 x = x.replace(',', '.')
@@ -48,16 +50,16 @@ class ProductParser:
                 if state == "totalsBegin":
                     product.price = number
                     if product.amount != 0:
-                        product.total = product.price * product.amount
+                        product.totalPrice = product.price * product.amount
                         products.append(product)
                         state = "initial"
                     else:
-                        product.total = product.price * product.amount
+                        product.totalPrice = product.price * product.amount
                         products.append(product)
                         state = "initial"
 
                 elif state == "totalsEnd":
-                    product.total = product.price * product.amount
+                    product.totalPrice = product.price * product.amount
                     products.append(product)
                     state = "initial"
                 pass
@@ -80,23 +82,36 @@ class ProductParser:
 
 
 class Bill:
-    date: str = ""
-    time: str = ""
-    id: int = 0
+    id: int | None = None
+    description: str | None = None  # describes the type of bill
+    billNr: int | None = None
+    billId: int | None = None
+    date: str | None = None
     products: [Product] = []
-    total: float = 0.0
+    time: str | None = None
+    total: float | None = None
+
+    # static
+    csvcounter: int = 0
+
+    def __init__(self):
+        self.id = Bill.csvcounter
+        Bill.csvcounter += 1
 
     def toDataframeRows(self) -> [typing.Dict]:
 
         dfRows = []
 
         for idx, product in enumerate(self.products):
-            dfRow = {"ID": self.id,
-                     "Datum": self.date,
+            dfRow = {"CSV Zeilenzähler": self.id,
+                     "Beschreibung": self.description,
+                     "Nr.": self.billNr,
+                     "ID-Nr.": self.billId,
+                     "Datum": self.date,  # todo parse from bill
                      "Produkt": product.name,
                      "Anzahl": product.amount,
                      "Einzelpreis": product.price,
-                     "Gesamtpreis": product.total}
+                     "Gesamtpreis": product.totalPrice}
 
             dfRows.append(dfRow)
 
@@ -105,18 +120,18 @@ class Bill:
     def fromSplittedString(self, rawData: [str]):
         # get first occurrence of Nr.
         nrLocus = rawData.index('Nr.')
-        try:
-            self.id = int(rawData[nrLocus + 1])
-            self.date = rawData[nrLocus + 3]
-            self.time = rawData[nrLocus + 5]
 
-            # find all idxs that contain `'___________________________________________'`
-            seperatorIdxs = [i for i, x in enumerate(rawData) if x == '___________________________________________']
+        self.billNr = int(rawData[nrLocus + 1])
+        self.billId = int(rawData[nrLocus + 8])
+        self.date = rawData[nrLocus + 3]
+        self.time = rawData[nrLocus + 5]
+        self.description = rawData[0].split(" ")[0]
 
-            for i in range(0, len(seperatorIdxs), 2):
-                self.products = ProductParser.fromSplittedString(rawData[seperatorIdxs[i] + 1:seperatorIdxs[i + 1]])
-        except ValueError:
-            print("Fehler beim Rechnung parsen!")
+        # find all idxs that contain `'___________________________________________'`
+        seperatorIdxs = [i for i, x in enumerate(rawData) if x == '___________________________________________']
+
+        for i in range(0, len(seperatorIdxs), 2):
+            self.products = ProductParser.fromSplittedString(rawData[seperatorIdxs[i] + 1:seperatorIdxs[i + 1]])
 
 
 def parseTxtFile(filepath: str) -> [Bill]:
@@ -161,16 +176,15 @@ def injectFormulas(parsedData: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def addImportedDataToTemplate(targetPath: str, extension: str, imported: pd.DataFrame):
-
-    if extension == "xlsx":
+def addImportedDataToTemplate(targetPath: str, extension: str, imported: pd.DataFrame, extensionExcel: str = ".xlsx"):
+    if extension == extensionExcel:
         # excel mode
         book = load_workbook(targetPath)  # already contains `Berechnung` Sheet
         # https://stackoverflow.com/a/61364633/11466033
-        writer = pd.ExcelWriter(targetPath,engine_kwargs={'options': {'strings_to_formulas': False}})
+        writer = pd.ExcelWriter(targetPath,  mode='w') #if_sheet_exists='overlay',  ,engine_kwargs={'options': {'strings_to_formulas': False}}
         writer.book = book
 
-        imported.to_excel(writer,  # add `Import` to file with `Berechnung` already in it
+        imported.to_excel(writer,  # add Import to file with `Berechnung` already in it
                           sheet_name="Import",
                           index_label="ID",
                           index=False,
@@ -182,7 +196,7 @@ def addImportedDataToTemplate(targetPath: str, extension: str, imported: pd.Data
         print(f"Excel Datei gespeichert unter {targetFile}")
     else:
         # csv mode
-        imported.to_csv(targetPath)
+        imported.to_csv(targetPath, index=False)
 
 
 def transformBillsToTable(bills: [Bill], targetPath: str, save: bool = True) -> pd.DataFrame:
@@ -197,45 +211,47 @@ def transformBillsToTable(bills: [Bill], targetPath: str, save: bool = True) -> 
     return df
 
 
-def createTargetFile(templatePath: str, destinationPath: str) -> typing.Tuple[str, str]:
-
+def createTargetFile(templatePath: str, destinationPath: str, extensionExcel: str = ".xlsx",
+                     extensionCsv: str = ".csv") -> typing.Tuple[str, str]:
     # varations: .xlsx, .csv
-    if os.path.exists(templatePath+".xlsx"):
+    if os.path.exists(templatePath + extensionExcel):
         # excel-mode
-        destinationPath = os.path.splitext(destinationPath)[0] + ".xlsx"
+        destinationPath = os.path.splitext(destinationPath)[0] + extensionExcel
 
-        shutil.copy2(templatePath+".xlsx", destinationPath)
+        shutil.copy2(templatePath + extensionExcel, destinationPath)
 
-        return destinationPath, "xlsx"
+        return destinationPath, extensionExcel
     else:
         # csv mode
-        destinationPath = os.path.splitext(destinationPath)[0] + ".csv"
+        destinationPath = os.path.splitext(destinationPath)[0] + extensionCsv
 
         # shutil.copy2(templatePath, destinationPath)
 
-        return destinationPath, "csv"
-
-
-
+        return destinationPath, extensionCsv
 
 
 if __name__ == '__main__':
-    try:
-        if len(sys.argv) < 2:
-            print("Keine Datei angegeben!")
-        else:
-            if os.path.isfile(sys.argv[1]):
-                bills = parseTxtFile(sys.argv[1])
-                table: pd.DataFrame = transformBillsToTable(bills, sys.argv[1])
-                # table = injectFormulas(table) # can be used to directly add formulas to import-df
-                targetFile, extension = createTargetFile(
-                    os.path.dirname(os.path.realpath(__file__)) + "\\template",
-                    os.path.realpath(sys.argv[1])
-                )
-                addImportedDataToTemplate(targetFile,extension, table)
-            else:
-                print("Angegebener Pfad ungültig!")
-    except Exception as e:
-        print(traceback.format_exc())
 
-    os.system('pause')
+    # ignore pandas warnings for now
+    # todo fix deprecation in future versions
+    warnings.filterwarnings('ignore')
+
+    if len(sys.argv) < 2:
+        print("Keine Datei angegeben!")
+    else:
+        templateFileName = "template"
+
+        if os.path.isfile(sys.argv[1]):
+            bills = parseTxtFile(sys.argv[1])
+            table: pd.DataFrame = transformBillsToTable(bills, sys.argv[1])
+            # table = injectFormulas(table) # can be used to directly add formulas to import-df
+            targetFile, extension = createTargetFile(
+                os.path.dirname(os.path.realpath(__file__)) + "\\" + templateFileName,
+                os.path.realpath(sys.argv[1]),
+                ".xlsm"
+            )
+            addImportedDataToTemplate(targetFile, extension, table, ".xlsm")
+        else:
+            print("Angegebener Pfad ungültig!")
+
+os.system('pause')
