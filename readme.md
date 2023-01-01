@@ -8,3 +8,15 @@
 ### Änderungen
 
 - ci toolchain um die exe zu bauen
+
+- neue tabllenstruktur
+    - CSV zeilenzähler
+    - beschreibung # rechnungstyp storno, rechnung, gutschrift 
+    - Nr.
+    - ID-Nr
+    - Datum
+    - produkt
+    - anzahl
+    - einzelpreis
+    - gesamtpreis
+
