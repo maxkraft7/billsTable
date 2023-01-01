@@ -1,9 +1,7 @@
 name: Package Application with Pyinstaller
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
+  tag:
     branches: [ main ]
 
 jobs:
@@ -21,5 +19,5 @@ jobs:
 
     - uses: actions/upload-artifact@v2
       with:
-        name: name-of-artifact
+        name: bills-table-${{  github.ref_name }}
         path: src/dist/windows
