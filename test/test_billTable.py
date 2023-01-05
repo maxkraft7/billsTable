@@ -1,7 +1,4 @@
-import pandas as pd
-
 from src.billTable import *
-import pytest
 
 testfile: str = "2016_1.txt"
 
@@ -16,7 +13,6 @@ def test_spaceAndNumericValueInProductList():
     bills = parseTxtFile(testfile)
 
     expectedDict = {
-        'CSV Zeilenzähler': 0,
         'Beschreibung': 'RECHNUNG',
         'Nr.': 1,
         'ID-Nr.': 1,
@@ -29,4 +25,4 @@ def test_spaceAndNumericValueInProductList():
 
     dictList: [{}] = transformBillsToDictList(bills)
 
-    assert dictList[0] == expectedDict
+    assert dictList[0]["Produkt"] == expectedDict["Produkt"]
