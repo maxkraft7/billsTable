@@ -41,7 +41,7 @@ class ProductParser:
 
         state = "initial"
 
-        for element in rawData:
+        for i, element in enumerate(rawData):
             typedElement = ProductParser.inferType(element)
 
             if type(typedElement) is float:
@@ -69,7 +69,12 @@ class ProductParser:
                     product = Product()
                     product.amount = typedElement
                     state = "productName"
-                pass
+
+                # if the product name still gets concatenated and it's not yet the last element in line append it to
+                #  the product name
+                if state == "totalsBegin" and i != len(rawData)-1:
+                    product.name += " " + element
+
             else:
                 if state == "productName" or state == "totalsBegin":
                     if product.name == "":
@@ -83,7 +88,7 @@ class ProductParser:
 
 class Bill:
     id: int = None
-    description: str= None  # describes the type of bill
+    description: str = None  # describes the type of bill
     billNr: int = None
     billId: int = None
     date: str = None
@@ -117,7 +122,11 @@ class Bill:
 
         return dfRows
 
-    def fromSplittedString(self, rawData: [str]):
+    def fromSplittedString(self, rawData: [str]) -> bool:
+
+        if len(rawData) == 0:
+            return False
+
         # get first occurrence of Nr.
         nrLocus = rawData.index('Nr.')
 
@@ -133,6 +142,8 @@ class Bill:
         for i in range(0, len(seperatorIdxs), 2):
             self.products = ProductParser.fromSplittedString(rawData[seperatorIdxs[i] + 1:seperatorIdxs[i + 1]])
 
+        return True
+
 
 def parseTxtFile(filepath: str) -> [Bill]:
     parsedBills: [Bill] = []
@@ -144,12 +155,12 @@ def parseTxtFile(filepath: str) -> [Bill]:
         bills = fileContent.split("\n\n   \n")  # split bills by separator
         bills.pop(0)  # remove header
 
-        for bill in bills:
-            bill: str = bill
-            billFragments = bill.split()  # split by any separator
-            bill: Bill = Bill()
-            bill.fromSplittedString(billFragments)
-            parsedBills.append(bill)
+        for rawBillString in bills:
+            rawBillString: str = rawBillString
+            billFragments = rawBillString.split()  # split by any separator
+            parsedBillObject: Bill = Bill()
+            if parsedBillObject.fromSplittedString(billFragments):
+                parsedBills.append(parsedBillObject)
 
     return parsedBills
 
@@ -181,7 +192,8 @@ def addImportedDataToTemplate(targetPath: str, extension: str, imported: pd.Data
         # excel mode
         book = load_workbook(targetPath)  # already contains `Berechnung` Sheet
         # https://stackoverflow.com/a/61364633/11466033
-        writer = pd.ExcelWriter(targetPath,  mode='w') #if_sheet_exists='overlay',  ,engine_kwargs={'options': {'strings_to_formulas': False}}
+        writer = pd.ExcelWriter(targetPath,
+                                mode='w')  # if_sheet_exists='overlay',  ,engine_kwargs={'options': {'strings_to_formulas': False}}
         writer.book = book
 
         imported.to_excel(writer,  # add Import to file with `Berechnung` already in it
@@ -199,14 +211,19 @@ def addImportedDataToTemplate(targetPath: str, extension: str, imported: pd.Data
         imported.to_csv(targetPath, index=False)
 
 
-def transformBillsToTable(bills: [Bill], targetPath: str, save: bool = True) -> pd.DataFrame:
+def transformBillsToDictList(bills: [Bill]) -> [{}]:
     dicts = []
 
     for bill in bills:
         bill: Bill = bill
         dicts += bill.toDataframeRows()
+
+    return dicts
+
+
+def transformBillsToTable(bills: [Bill]) -> pd.DataFrame:
     # https://stackoverflow.com/a/47561390/11466033
-    df: pd.DataFrame = pd.DataFrame(dicts)
+    df: pd.DataFrame = pd.DataFrame(transformBillsToDictList(bills))
 
     return df
 
@@ -243,7 +260,7 @@ if __name__ == '__main__':
 
         if os.path.isfile(sys.argv[1]):
             bills = parseTxtFile(sys.argv[1])
-            table: pd.DataFrame = transformBillsToTable(bills, sys.argv[1])
+            table: pd.DataFrame = transformBillsToTable(bills)
             # table = injectFormulas(table) # can be used to directly add formulas to import-df
             targetFile, extension = createTargetFile(
                 os.path.dirname(os.path.realpath(__file__)) + "\\" + templateFileName,
