@@ -8,6 +8,17 @@ import warnings
 import pandas as pd
 from openpyxl import load_workbook
 
+from enum import Enum
+
+
+# class syntax
+
+class ParserState(Enum):
+    ITEM_AMOUNT = 1
+    PRODUCT_NAME = 2
+    TOTALS_BEGIN = 3
+    TOTALS_END = 4
+
 
 class Product:
     name: str = ""
@@ -35,11 +46,20 @@ class ProductParser:
                 return x
 
     @staticmethod
+    def appendToProductName(element, product):
+        if product.name == "":
+            product.name = element
+        else:
+            product.name += " " + element
+
+        return product
+
+    @staticmethod
     def fromSplittedString(rawData: [str]) -> [Product]:
         products: [Product] = []
         product = Product()
 
-        state = "initial"
+        state: ParserState = ParserState.ITEM_AMOUNT
 
         for i, element in enumerate(rawData):
             typedElement = ProductParser.inferType(element)
@@ -47,41 +67,41 @@ class ProductParser:
             if type(typedElement) is float:
                 number = typedElement
 
-                if state == "totalsBegin":
+                if state == ParserState.TOTALS_BEGIN or state == ParserState.PRODUCT_NAME:
                     product.price = number
                     if product.amount != 0:
                         product.totalPrice = product.price * product.amount
                         products.append(product)
-                        state = "initial"
+                        state = ParserState.ITEM_AMOUNT
                     else:
                         product.totalPrice = product.price * product.amount
                         products.append(product)
-                        state = "initial"
+                        state = ParserState.ITEM_AMOUNT
 
-                elif state == "totalsEnd":
+                elif state == ParserState.TOTALS_END:
                     product.totalPrice = product.price * product.amount
                     products.append(product)
-                    state = "initial"
+                    state = ParserState.ITEM_AMOUNT
                 pass
             elif type(typedElement) is int:
 
-                if state == "initial":
+                if state == ParserState.PRODUCT_NAME:
+                    product = ProductParser.appendToProductName(element, product)
+                    state = ParserState.PRODUCT_NAME
+
+                if state == ParserState.ITEM_AMOUNT:
                     product = Product()
                     product.amount = typedElement
-                    state = "productName"
-
+                    state = ParserState.PRODUCT_NAME
+            else:
                 # if the product name still gets concatenated and it's not yet the last element in line append it to
                 #  the product name
-                if state == "totalsBegin" and i != len(rawData)-1:
-                    product.name += " " + element
+                if state == ParserState.TOTALS_BEGIN and i != len(rawData) - 1:
+                    product = ProductParser.appendToProductName(element, product)
 
-            else:
-                if state == "productName" or state == "totalsBegin":
-                    if product.name == "":
-                        product.name = element
-                    else:
-                        product.name += " " + element
-                    state = "totalsBegin"
+                if state == ParserState.PRODUCT_NAME or state == ParserState.TOTALS_BEGIN:
+                    product = ProductParser.appendToProductName(element, product)
+                    state = ParserState.PRODUCT_NAME
 
         return products
 
