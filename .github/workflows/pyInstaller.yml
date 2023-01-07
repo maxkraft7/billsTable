@@ -27,6 +27,6 @@ jobs:
     - name: Release with Notes
       uses: softprops/action-gh-release@v1
       with:
-        files: src/dist/windows/bills-table-${{  github.ref_name }}
+        files: src/dist/windows/bills-table-${{  github.ref_name }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
