@@ -26,6 +26,9 @@ class Product:
     amount: int = 0
     totalPrice: float = 0.0
 
+    def calculateTotalPrice(self):
+        self.totalPrice = self.price * self.amount
+
 
 class ProductParser:
 
@@ -55,55 +58,32 @@ class ProductParser:
         return product
 
     @staticmethod
-    def fromSplittedString(rawData: [str]) -> [Product]:
-        products: [Product] = []
-        product = Product()
+    def fromSplittedString(rawData: [str], billLines: [str], currentIdx: int) -> typing.Optional[Product]:
 
-        state: ParserState = ParserState.ITEM_AMOUNT
+        # overflow line with just the price
+        if len(rawData) < 3:
+            return None
 
-        for i, element in enumerate(rawData):
-            typedElement = ProductParser.inferType(element)
+        product: Product = Product()
+        product.amount = int(rawData[0])
 
-            if type(typedElement) is float:
-                number = typedElement
+        priceCandidate: str = rawData[-1].replace(',', '.')
 
-                if state == ParserState.TOTALS_BEGIN or state == ParserState.PRODUCT_NAME:
-                    product.price = number
-                    if product.amount != 0:
-                        product.totalPrice = product.price * product.amount
-                        products.append(product)
-                        state = ParserState.ITEM_AMOUNT
-                    else:
-                        product.totalPrice = product.price * product.amount
-                        products.append(product)
-                        state = ParserState.ITEM_AMOUNT
+        if priceCandidate.replace('.', '').isdigit():
+            # last arg is price
+            pass
+        else:
+            # price is only arg in next line
+            priceCandidate = billLines[currentIdx + 1].replace(',','.')
 
-                elif state == ParserState.TOTALS_END:
-                    product.totalPrice = product.price * product.amount
-                    products.append(product)
-                    state = ParserState.ITEM_AMOUNT
-                pass
-            elif type(typedElement) is int:
+        product.price = float(priceCandidate)
 
-                if state == ParserState.PRODUCT_NAME:
-                    product = ProductParser.appendToProductName(element, product)
-                    state = ParserState.PRODUCT_NAME
+        for s in rawData[1:-1]:
+            product = ProductParser.appendToProductName(s, product)
 
-                if state == ParserState.ITEM_AMOUNT:
-                    product = Product()
-                    product.amount = typedElement
-                    state = ParserState.PRODUCT_NAME
-            else:
-                # if the product name still gets concatenated and it's not yet the last element in line append it to
-                #  the product name
-                if state == ParserState.TOTALS_BEGIN and i != len(rawData) - 1:
-                    product = ProductParser.appendToProductName(element, product)
+        product.calculateTotalPrice()
 
-                if state == ParserState.PRODUCT_NAME or state == ParserState.TOTALS_BEGIN:
-                    product = ProductParser.appendToProductName(element, product)
-                    state = ParserState.PRODUCT_NAME
-
-        return products
+        return product
 
 
 class Bill:
@@ -142,25 +122,29 @@ class Bill:
 
         return dfRows
 
-    def fromSplittedString(self, rawData: [str]) -> bool:
+    def fromSplittedString(self, billFragments: [str], billLines: [str]) -> bool:
 
-        if len(rawData) == 0:
+        if len(billFragments) == 0:
             return False
 
         # get first occurrence of Nr.
-        nrLocus = rawData.index('Nr.')
+        nrLocus = billFragments.index('Nr.')
 
-        self.billNr = int(rawData[nrLocus + 1])
-        self.billId = int(rawData[nrLocus + 8])
-        self.date = rawData[nrLocus + 3]
-        self.time = rawData[nrLocus + 5]
-        self.description = rawData[0].split(" ")[0]
+        self.billNr = int(billFragments[nrLocus + 1])
+        self.billId = int(billFragments[nrLocus + 8])
+        self.date = billFragments[nrLocus + 3]
+        self.time = billFragments[nrLocus + 5]
+        self.description = billFragments[0].split(" ")[0]
 
         # find all idxs that contain `'___________________________________________'`
-        seperatorIdxs = [i for i, x in enumerate(rawData) if x == '___________________________________________']
+        seperatorIdxs = [i for i, x in enumerate(billLines) if x == '___________________________________________']
 
-        for i in range(0, len(seperatorIdxs), 2):
-            self.products = ProductParser.fromSplittedString(rawData[seperatorIdxs[i] + 1:seperatorIdxs[i + 1]])
+        for i in range(seperatorIdxs[0] + 1, seperatorIdxs[1]):
+
+            optionalProduct: typing.Optional[Product] = ProductParser.fromSplittedString(billLines[i].split(), billLines, i)
+
+            if optionalProduct is not None:
+                self.products.append(optionalProduct)
 
         return True
 
@@ -179,7 +163,7 @@ def parseTxtFile(filepath: str) -> [Bill]:
             rawBillString: str = rawBillString
             billFragments = rawBillString.split()  # split by any separator
             parsedBillObject: Bill = Bill()
-            if parsedBillObject.fromSplittedString(billFragments):
+            if parsedBillObject.fromSplittedString(billFragments, rawBillString.splitlines()):
                 parsedBills.append(parsedBillObject)
 
     return parsedBills
