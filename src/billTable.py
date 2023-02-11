@@ -58,6 +58,13 @@ class ProductParser:
         return product
 
     @staticmethod
+    def tryParseFloat(input: str):
+        try:
+            return float(input)
+        except:
+            return None
+
+    @staticmethod
     def fromSplittedString(rawData: [str], billLines: [str], currentIdx: int) -> typing.Optional[Product]:
 
         # overflow line with just the price
@@ -74,9 +81,21 @@ class ProductParser:
             pass
         else:
             # price is only arg in next line
-            priceCandidate = billLines[currentIdx + 1].replace(',','.')
+            priceCandidateArr  = billLines[currentIdx + 1].replace(',', '.').split()
 
-        product.price = float(priceCandidate)
+            if len(priceCandidateArr) == 1:
+                priceCandidate = priceCandidateArr[-1]
+
+            if len(priceCandidateArr) == 2:
+                product.price = float(priceCandidateArr[-2])
+                product.amount = float(priceCandidateArr[-1])
+                priceCandidate = None
+
+
+        # if ProductParser.tryParseFloat(priceCandidate) is not None:
+        if priceCandidate is not None:
+            product.price = float(priceCandidate)
+
 
         for s in rawData[1:-1]:
             product = ProductParser.appendToProductName(s, product)
@@ -92,7 +111,7 @@ class Bill:
     billNr: int = None
     billId: int = None
     date: str = None
-    products: [Product] = []
+    products: [Product] = None
     time: str = None
     total: float = None
 
@@ -100,6 +119,7 @@ class Bill:
     csvcounter: int = 0
 
     def __init__(self):
+        self.products = []
         self.id = Bill.csvcounter
         Bill.csvcounter += 1
 
@@ -141,7 +161,8 @@ class Bill:
 
         for i in range(seperatorIdxs[0] + 1, seperatorIdxs[1]):
 
-            optionalProduct: typing.Optional[Product] = ProductParser.fromSplittedString(billLines[i].split(), billLines, i)
+            optionalProduct: typing.Optional[Product] = ProductParser.fromSplittedString(billLines[i].split(),
+                                                                                         billLines, i)
 
             if optionalProduct is not None:
                 self.products.append(optionalProduct)
@@ -260,7 +281,7 @@ if __name__ == '__main__':
     if len(sys.argv) < 2:
         print("Keine Datei angegeben!")
     else:
-        templateFileName = "template"
+        templateFileName = "template2"
 
         if os.path.isfile(sys.argv[1]):
             bills = parseTxtFile(sys.argv[1])
